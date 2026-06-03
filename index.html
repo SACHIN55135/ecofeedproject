@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoFeed - Food Waste Management & Donation Platform</title>
+  <meta name="description" content="Connecting restaurants, hotels, and individuals with NGOs to minimize food waste and feed those in need.">
+  
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome for fallback icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- React 18 & ReactDOM 18 -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  
+  <!-- Babel for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Tailwind Custom Config -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            outfit: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            sustain: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              300: '#86efac',
+              400: '#4ade80',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+              950: '#022c22',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 3s ease-in-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-8px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style type="text/css">
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    h1, h2, h3, .font-outfit {
+      font-family: 'Outfit', sans-serif;
+    }
+    /* Smooth transition for theme colors */
+    * {
+      transition: background-color 0.3s ease, border-color 0.3s ease, color 0.15s ease;
+    }
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .no-scrollbar {
+      -ms-overflow-style: none;  /* IE and Edge */
+      scrollbar-width: none;  /* Firefox */
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Root React App Container -->
+  <div id="root"></div>
+
+  <!-- React JSX Code -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // --- MOCK DATABASE SEED DATA ---
+    const initialUsers = [
+      { id: 1, name: "La Piazza Restaurant", email: "donor@lapiazza.com", phone: "+1 555-0199", role: "Donor", password: "password" },
+      { id: 2, name: "Green Valley Hotel", email: "hotel@greenvalley.com", phone: "+1 555-0211", role: "Donor", password: "password" },
+      { id: 3, name: "Save Food Foundation", email: "ngo@savefood.org", phone: "+1 555-0188", role: "NGO", password: "password", organization_name: "Save Food Foundation", address: "742 Evergreen Terrace, Springfield", verification_status: "Approved" },
+      { id: 4, name: "Hope Mission Charity", email: "ngo@hopemission.org", phone: "+1 555-0133", role: "NGO", password: "password", organization_name: "Hope Mission Charity", address: "123 Main St, Springfield", verification_status: "Pending" },
+      { id: 5, name: "Super Admin", email: "admin@ecofeed.com", phone: "+1 555-0100", role: "Admin", password: "password" }
+    ];
+
+    const initialDonations = [
+      {
+        donation_id: 101,
+        donor_id: 1,
+        donor_name: "La Piazza Restaurant",
+        food_name: "Fresh Baked Lasagna & Bread",
+        quantity: 25, // servings / kg
+        food_type: "Veg",
+        expiry_time: "2026-06-03T18:00",
+        pickup_address: "456 Italian Way, Food District",
+        image: "https://images.unsplash.com/photo-1574894709920-11b28e7367e3?auto=format&fit=crop&q=80&w=600",
+        status: "Available",
+        created_at: "2026-06-03T08:30"
+      },
+      {
+        donation_id: 102,
+        donor_id: 2,
+        donor_name: "Green Valley Hotel",
+        food_name: "Mixed Dinner Buffet Items",
+        quantity: 60,
+        food_type: "Non-Veg",
+        expiry_time: "2026-06-03T23:30",
+        pickup_address: "88 Luxury Blvd, Uptown",
+        image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=600",
+        status: "Claimed",
+        ngo_id: 3,
+        ngo_name: "Save Food Foundation",
+        pickup_status: "Requested",
+        created_at: "2026-06-03T07:15"
+      },
+      {
+        donation_id: 103,
+        donor_id: 1,
+        donor_name: "La Piazza Restaurant",
+        food_name: "Assorted Breakfast Pastries",
+        quantity: 15,
+        food_type: "Bakery",
+        expiry_time: "2026-06-02T12:00",
+        pickup_address: "456 Italian Way, Food District",
+        image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=600",
+        status: "Picked Up",
+        ngo_id: 3,
+        ngo_name: "Save Food Foundation",
+        pickup_status: "Delivered",
+        created_at: "2026-06-02T08:00"
+      },
+      {
+        donation_id: 104,
+        donor_id: 2,
+        donor_name: "Green Valley Hotel",
+        food_name: "Fresh Fruit Salad Platters",
+        quantity: 30,
+        food_type: "Veg",
+        expiry_time: "2026-06-03T20:00",
+        pickup_address: "88 Luxury Blvd, Uptown",
+        image: "https://images.unsplash.com/photo-1519996529931-28324d5a630e?auto=format&fit=crop&q=80&w=600",
+        status: "Available",
+        created_at: "2026-06-03T09:00"
+      }
+    ];
+
+    const initialFeedbacks = [
+      { feedback_id: 1, donation_id: 103, rating: 5, comment: "Punctual collection, polite volunteers!", from_user: "La Piazza", to_user: "Save Food Foundation" },
+      { feedback_id: 2, donation_id: 103, rating: 5, comment: "Quality of pastries was excellent. Kept cold.", from_user: "Save Food Foundation", to_user: "La Piazza" }
+    ];
+
+    function App() {
+      // States
+      const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+      const [currentUser, setCurrentUser] = useState(null);
+      const [users, setUsers] = useState(initialUsers);
+      const [donations, setDonations] = useState(initialDonations);
+      const [feedbacks, setFeedbacks] = useState(initialFeedbacks);
+      const [notifications, setNotifications] = useState([
+        { id: 1, text: "New donation added by La Piazza Restaurant", time: "10 mins ago", unread: true },
+        { id: 2, text: "Save Food Foundation claimed Green Valley Hotel's donation", time: "2 hours ago", unread: false }
+      ]);
+      const [currentView, setCurrentView] = useState('home'); // home, login, register, donor-db, ngo-db, admin-db
+      const [toast, setToast] = useState(null);
+      
+      // Auth forms
+      const [loginEmail, setLoginEmail] = useState('');
+      const [loginPassword, setLoginPassword] = useState('');
+      const [regRole, setRegRole] = useState('Donor');
+      const [regName, setRegName] = useState('');
+      const [regEmail, setRegEmail] = useState('');
+      const [regPhone, setRegPhone] = useState('');
+      const [regPassword, setRegPassword] = useState('');
+      const [regNgoName, setRegNgoName] = useState('');
+      const [regNgoAddress, setRegNgoAddress] = useState('');
+
+      // Donor Form States
+      const [foodName, setFoodName] = useState('');
+      const [foodQty, setFoodQty] = useState('');
+      const [foodType, setFoodType] = useState('Veg');
+      const [foodExpiry, setFoodExpiry] = useState('');
+      const [foodAddress, setFoodAddress] = useState('');
+      const [foodImage, setFoodImage] = useState('');
+
+      // Filters
+      const [searchTerm, setSearchTerm] = useState('');
+      const [filterType, setFilterType] = useState('All');
+      const [filterStatus, setFilterStatus] = useState('Available');
+
+      // Admin Management
+      const [adminNgoFilter, setAdminNgoFilter] = useState('All');
+
+      // Feedback submission
+      const [ratingInput, setRatingInput] = useState(5);
+      const [commentInput, setCommentInput] = useState('');
+      const [activeFeedbackDonation, setActiveFeedbackDonation] = useState(null);
+
+      // Dark Mode Effect
+      useEffect(() => {
+        const rootElement = document.documentElement;
+        if (theme === 'dark') {
+          rootElement.classList.add('dark');
+        } else {
+          rootElement.classList.remove('dark');
+        }
+        localStorage.setItem('theme', theme);
+      }, [theme]);
+
+      // Show Toast Helper
+      const triggerToast = (message, type = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 4000);
+      };
+
+      // Handle Login
+      const handleLogin = (e) => {
+        if (e) e.preventDefault();
+        const user = users.find(u => u.email.toLowerCase() === loginEmail.toLowerCase() && u.password === loginPassword);
+        if (user) {
+          setCurrentUser(user);
+          triggerToast(`Welcome back, ${user.name}!`);
+          if (user.role === 'Donor') setCurrentView('donor-db');
+          else if (user.role === 'NGO') setCurrentView('ngo-db');
+          else if (user.role === 'Admin') setCurrentView('admin-db');
+          // Clear inputs
+          setLoginEmail('');
+          setLoginPassword('');
+        } else {
+          triggerToast("Invalid email or password", "error");
+        }
+      };
+
+      // Quick Login Helper for Presentation
+      const quickLogin = (role) => {
+        const userMap = {
+          'Donor': 'donor@lapiazza.com',
+          'NGO': 'ngo@savefood.org',
+          'Admin': 'admin@ecofeed.com'
+        };
+        const email = userMap[role];
+        const user = users.find(u => u.email === email);
+        if (user) {
+          setCurrentUser(user);
+          triggerToast(`Simulated Login as ${user.name} (${user.role})`);
+          if (user.role === 'Donor') setCurrentView('donor-db');
+          else if (user.role === 'NGO') setCurrentView('ngo-db');
+          else if (user.role === 'Admin') setCurrentView('admin-db');
+        }
+      };
+
+      // Handle Register
+      const handleRegister = (e) => {
+        e.preventDefault();
+        if (!regName || !regEmail || !regPassword || !regPhone) {
+          triggerToast("Please fill in all standard fields", "error");
+          return;
+        }
+
+        const newUser = {
+          id: users.length + 1,
+          name: regName,
+          email: regEmail,
+          phone: regPhone,
+          role: regRole,
+          password: regPassword
+        };
+
+        if (regRole === 'NGO') {
+          if (!regNgoName || !regNgoAddress) {
+            triggerToast("Please enter NGO organization name and address", "error");
+            return;
+          }
+          newUser.organization_name = regNgoName;
+          newUser.address = regNgoAddress;
+          newUser.verification_status = 'Pending';
+        }
+
+        setUsers([...users, newUser]);
+        setCurrentUser(newUser);
+        triggerToast("Account registered successfully!");
+        
+        if (regRole === 'Donor') setCurrentView('donor-db');
+        else if (regRole === 'NGO') {
+          setCurrentView('ngo-db');
+          triggerToast("NGO Registered! Status: Pending Approval by Admin.", "info");
+        }
+        
+        // Reset form
+        setRegName('');
+        setRegEmail('');
+        setRegPhone('');
+        setRegPassword('');
+        setRegNgoName('');
+        setRegNgoAddress('');
+      };
+
+      // Handle Add Donation
+      const handleAddDonation = (e) => {
+        e.preventDefault();
+        if (!foodName || !foodQty || !foodExpiry || !foodAddress) {
+          triggerToast("Please fill all donation fields", "error");
+          return;
+        }
+
+        const defaultImages = {
+          Veg: "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=600",
+          "Non-Veg": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?auto=format&fit=crop&q=80&w=600",
+          Bakery: "https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&q=80&w=600",
+          Groceries: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600"
+        };
+
+        const newDonation = {
+          donation_id: donations.length + 101,
+          donor_id: currentUser.id,
+          donor_name: currentUser.name,
+          food_name: foodName,
+          quantity: parseFloat(foodQty),
+          food_type: foodType,
+          expiry_time: foodExpiry,
+          pickup_address: foodAddress,
+          image: foodImage || defaultImages[foodType],
+          status: 'Available',
+          created_at: new Date().toISOString()
+        };
+
+        setDonations([newDonation, ...donations]);
+        setNotifications([
+          { id: notifications.length + 1, text: `New donation added: ${foodName} by ${currentUser.name}`, time: "Just now", unread: true },
+          ...notifications
+        ]);
+        triggerToast("Food donation listed successfully!");
+
+        // Reset
+        setFoodName('');
+        setFoodQty('');
+        setFoodExpiry('');
+        setFoodAddress('');
+        setFoodImage('');
+      };
+
+      // NGO Claim Donation
+      const claimDonation = (donationId) => {
+        if (currentUser.role !== 'NGO') {
+          triggerToast("Only registered NGOs can claim donations", "error");
+          return;
+        }
+        if (currentUser.verification_status !== 'Approved') {
+          triggerToast("Your NGO account is pending approval by the Admin.", "warning");
+          return;
+        }
+
+        setDonations(donations.map(d => {
+          if (d.donation_id === donationId) {
+            return {
+              ...d,
+              status: 'Claimed',
+              ngo_id: currentUser.id,
+              ngo_name: currentUser.name,
+              pickup_status: 'Requested'
+            };
+          }
+          return d;
+        }));
+
+        setNotifications([
+          { id: notifications.length + 1, text: `${currentUser.name} has claimed the donation for ${donations.find(d => d.donation_id === donationId).food_name}`, time: "Just now", unread: true },
+          ...notifications
+        ]);
+        triggerToast("Donation claimed successfully! Coordinate with the donor.");
+      };
+
+      // NGO Update Pickup Status
+      const updatePickupStatus = (donationId, nextStatus) => {
+        setDonations(donations.map(d => {
+          if (d.donation_id === donationId) {
+            const updated = { ...d, pickup_status: nextStatus };
+            if (nextStatus === 'Delivered') {
+              updated.status = 'Picked Up';
+            }
+            return updated;
+          }
+          return d;
+        }));
+
+        triggerToast(`Status updated to: ${nextStatus}`);
+      };
+
+      // Feedback submission
+      const submitFeedback = (e) => {
+        e.preventDefault();
+        if (!activeFeedbackDonation) return;
+
+        const newFeedback = {
+          feedback_id: feedbacks.length + 1,
+          donation_id: activeFeedbackDonation.donation_id,
+          rating: ratingInput,
+          comment: commentInput,
+          from_user: currentUser.name,
+          to_user: currentUser.role === 'Donor' ? activeFeedbackDonation.ngo_name : activeFeedbackDonation.donor_name
+        };
+
+        setFeedbacks([...feedbacks, newFeedback]);
+        setActiveFeedbackDonation(null);
+        setCommentInput('');
+        triggerToast("Feedback submitted successfully!");
+      };
+
+      // Admin Approvals
+      const approveNgo = (userId) => {
+        setUsers(users.map(u => {
+          if (u.id === userId) {
+            return { ...u, verification_status: 'Approved' };
+          }
+          return u;
+        }));
+        triggerToast("NGO Registration approved!");
+      };
+
+      const rejectNgo = (userId) => {
+        setUsers(users.map(u => {
+          if (u.id === userId) {
+            return { ...u, verification_status: 'Rejected' };
+          }
+          return u;
+        }));
+        triggerToast("NGO Registration rejected", "warning");
+      };
+
+      // Stats Calculations
+      const stats = useMemo(() => {
+        const foodSaved = donations
+          .filter(d => d.status === 'Picked Up')
+          .reduce((acc, curr) => acc + curr.quantity, 0);
+
+        const activeDonationsCount = donations.filter(d => d.status === 'Available').length;
+        const totalDonationsCount = donations.length;
+        const ngosConnected = users.filter(u => u.role === 'NGO' && u.verification_status === 'Approved').length;
+
+        return { foodSaved, activeDonationsCount, totalDonationsCount, ngosConnected };
+      }, [donations, users]);
+
+      // Filtered donations for NGO browsing
+      const filteredDonations = useMemo(() => {
+        return donations.filter(d => {
+          const matchesSearch = d.food_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                d.pickup_address.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesType = filterType === 'All' || d.food_type === filterType;
+          const matchesStatus = filterStatus === 'All' || d.status === filterStatus;
+          return matchesSearch && matchesType && matchesStatus;
+        });
+      }, [donations, searchTerm, filterType, filterStatus]);
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          
+          {/* --- TOP HACKATHON ROLE QUICK SELECT BAR --- */}
+          <div className="bg-sustain-900 text-xs text-white py-2 px-4 flex justify-between items-center border-b border-sustain-800 z-50">
+            <div className="flex items-center gap-2">
+              <span className="bg-sustain-500 text-black px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-[9px]">Hackathon Controls</span>
+              <span className="hidden md:inline text-sustain-300">Quickly toggle user personas to test interactions in real-time:</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => quickLogin('Donor')} className="bg-emerald-800 hover:bg-emerald-700 px-2 py-0.5 rounded font-medium border border-emerald-600 transition-colors">
+                🔑 Donor Sandbox
+              </button>
+              <button onClick={() => quickLogin('NGO')} className="bg-sky-800 hover:bg-sky-700 px-2 py-0.5 rounded font-medium border border-sky-600 transition-colors">
+                🔑 NGO Sandbox
+              </button>
+              <button onClick={() => quickLogin('Admin')} className="bg-amber-800 hover:bg-amber-700 px-2 py-0.5 rounded font-medium border border-amber-600 transition-colors">
+                🔑 Admin Sandbox
+              </button>
+              {currentUser && (
+                <button onClick={() => { setCurrentUser(null); setCurrentView('home'); triggerToast("Logged out successfully"); }} className="bg-rose-900 hover:bg-rose-800 px-2 py-0.5 rounded font-medium border border-rose-600 transition-colors">
+                  Logout
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* --- MAIN HEADER NAVBAR --- */}
+          <header className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-40">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+              
+              {/* Logo */}
+              <div className="flex items-center cursor-pointer" onClick={() => setCurrentView('home')}>
+                <div className="h-10 w-10 bg-gradient-to-tr from-sustain-500 to-lime-400 rounded-xl flex items-center justify-center shadow-lg shadow-sustain-500/20 mr-3">
+                  <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+                  </svg>
+                </div>
+                <span className="text-xl font-bold font-outfit tracking-tight bg-gradient-to-r from-sustain-600 to-sustain-800 dark:from-sustain-400 dark:to-lime-400 bg-clip-text text-transparent">
+                  EcoFeed
+                </span>
+              </div>
+
+              {/* Navigation Tabs */}
+              <nav className="hidden md:flex space-x-8 text-sm font-medium">
+                <button onClick={() => setCurrentView('home')} className={`transition-colors py-1 ${currentView === 'home' ? 'text-sustain-600 dark:text-sustain-400 border-b-2 border-sustain-500' : 'text-slate-600 dark:text-slate-300 hover:text-sustain-500'}`}>
+                  Home
+                </button>
+                {currentUser && currentUser.role === 'Donor' && (
+                  <button onClick={() => setCurrentView('donor-db')} className={`transition-colors py-1 ${currentView === 'donor-db' ? 'text-sustain-600 dark:text-sustain-400 border-b-2 border-sustain-500' : 'text-slate-600 dark:text-slate-300 hover:text-sustain-500'}`}>
+                    Donor Dashboard
+                  </button>
+                )}
+                {currentUser && currentUser.role === 'NGO' && (
+                  <button onClick={() => setCurrentView('ngo-db')} className={`transition-colors py-1 ${currentView === 'ngo-db' ? 'text-sustain-600 dark:text-sustain-400 border-b-2 border-sustain-500' : 'text-slate-600 dark:text-slate-300 hover:text-sustain-500'}`}>
+                    NGO Dashboard
+                  </button>
+                )}
+                {currentUser && currentUser.role === 'Admin' && (
+                  <button onClick={() => setCurrentView('admin-db')} className={`transition-colors py-1 ${currentView === 'admin-db' ? 'text-sustain-600 dark:text-sustain-400 border-b-2 border-sustain-500' : 'text-slate-600 dark:text-slate-300 hover:text-sustain-500'}`}>
+                    Admin Console
+                  </button>
+                )}
+                <a href="#about" onClick={() => setCurrentView('home')} className="text-slate-600 dark:text-slate-300 hover:text-sustain-500 py-1">About</a>
+                <a href="#how-it-works" onClick={() => setCurrentView('home')} className="text-slate-600 dark:text-slate-300 hover:text-sustain-500 py-1">How It Works</a>
+                <a href="#contact" onClick={() => setCurrentView('home')} className="text-slate-600 dark:text-slate-300 hover:text-sustain-500 py-1">Contact</a>
+              </nav>
+
+              {/* Right Menu: DarkMode, Login button, User Info */}
+              <div className="flex items-center space-x-4">
+                
+                {/* Theme toggle */}
+                <button 
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                  aria-label="Toggle theme"
+                >
+                  {theme === 'dark' ? (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" /></svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                  )}
+                </button>
+
+                {/* Notifications Bell */}
+                <div className="relative group">
+                  <button className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors relative">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                    {notifications.filter(n => n.unread).length > 0 && (
+                      <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-rose-500 rounded-full animate-pulse"></span>
+                    )}
+                  </button>
+                  
+                  {/* Notifications Dropdown */}
+                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-2 hidden group-hover:block hover:block z-50">
+                    <div className="px-4 py-1.5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                      <span className="font-semibold text-xs text-slate-700 dark:text-slate-300">Notifications</span>
+                      <button onClick={() => setNotifications(notifications.map(n => ({...n, unread: false})))} className="text-[10px] text-sustain-600 dark:text-sustain-400 hover:underline">Mark all read</button>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto no-scrollbar">
+                      {notifications.map(n => (
+                        <div key={n.id} className={`px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-50 dark:border-slate-800/50 flex flex-col gap-0.5 ${n.unread ? 'bg-sustain-50/40 dark:bg-sustain-950/20' : ''}`}>
+                          <p className="text-xs text-slate-600 dark:text-slate-300">{n.text}</p>
+                          <span className="text-[10px] text-slate-400">{n.time}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Login/User Section */}
+                {currentUser ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-sustain-500/10 text-sustain-700 dark:text-sustain-400 border border-sustain-500/30 flex items-center justify-center font-bold text-sm">
+                      {currentUser.name.charAt(0)}
+                    </div>
+                    <span className="hidden lg:inline text-xs font-semibold text-slate-700 dark:text-slate-300 max-w-[120px] truncate">{currentUser.name}</span>
+                  </div>
+                ) : (
+                  <button onClick={() => setCurrentView('login')} className="bg-sustain-600 hover:bg-sustain-700 text-white font-medium text-sm px-4.5 py-2 rounded-lg transition-all shadow-md shadow-sustain-600/10">
+                    Sign In
+                  </button>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {/* --- MAIN PAGE CONTENT SWITCHER --- */}
+          <main className="flex-grow">
+            
+            {/* 1. TOAST ALERTS SYSTEM */}
+            {toast && (
+              <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-lg shadow-xl border flex items-center gap-2 max-w-sm transition-all animate-bounce ${
+                toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200' :
+                toast.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200' :
+                toast.type === 'info' ? 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200' :
+                'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+              }`}>
+                {toast.type === 'error' ? (
+                  <svg className="h-5 w-5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                ) : (
+                  <svg className="h-5 w-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                )}
+                <span className="text-xs font-semibold">{toast.message}</span>
+              </div>
+            )}
+
+            {/* 2. RATING MODAL */}
+            {activeFeedbackDonation && (
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-6 relative">
+                  <h3 className="text-lg font-bold font-outfit mb-2">Review Donation Experience</h3>
+                  <p className="text-xs text-slate-500 mb-4">For food item: <strong>{activeFeedbackDonation.food_name}</strong></p>
+                  <form onSubmit={submitFeedback} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-400">Rating</label>
+                      <div className="flex gap-1.5 text-2xl text-amber-400">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button key={star} type="button" onClick={() => setRatingInput(star)} className="hover:scale-115 transition-transform">
+                            <i className={star <= ratingInput ? "fa-solid fa-star" : "fa-regular fa-star"}></i>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-400">Comments</label>
+                      <textarea 
+                        value={commentInput}
+                        onChange={(e) => setCommentInput(e.target.value)}
+                        placeholder="Share your experience (safety, speed, packaging...)"
+                        rows="3"
+                        className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                        required
+                      ></textarea>
+                    </div>
+                    <div className="flex justify-end gap-2 text-xs font-semibold pt-2">
+                      <button type="button" onClick={() => setActiveFeedbackDonation(null)} className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg">Cancel</button>
+                      <button type="submit" className="px-4 py-2 bg-sustain-600 text-white rounded-lg hover:bg-sustain-700">Submit Review</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* --- RENDERING VIEWS --- */}
+
+            {/* A. HOME VIEW */}
+            {currentView === 'home' && (
+              <div>
+                {/* HERO SECTION */}
+                <section className="relative overflow-hidden pt-12 pb-20 lg:pt-20 lg:pb-32 bg-gradient-to-b from-sustain-50/50 via-slate-50 to-white dark:from-sustain-950/20 dark:via-slate-950 dark:to-slate-950">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    
+                    {/* Left: Content */}
+                    <div className="space-y-6 text-center lg:text-left">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-sustain-100 dark:bg-sustain-900/40 text-sustain-700 dark:text-sustain-300 rounded-full text-xs font-semibold tracking-wide border border-sustain-200 dark:border-sustain-800/40 animate-pulse">
+                        🌱 Zero Hunger & Sustainable Communities
+                      </div>
+                      <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-outfit text-slate-900 dark:text-white leading-[1.1] tracking-tight">
+                        Reduce Food Waste,<br />
+                        <span className="bg-gradient-to-r from-sustain-600 via-emerald-500 to-lime-500 bg-clip-text text-transparent">
+                          Feed More Lives
+                        </span>
+                      </h1>
+                      <p className="text-slate-600 dark:text-slate-400 text-base sm:text-lg max-w-xl mx-auto lg:mx-0">
+                        Bridging the surplus food gap. Connecting restaurants, hotels, wedding halls, and individuals with charities to deliver edible food to those in need in real-time.
+                      </p>
+                      
+                      <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4 pt-2">
+                        <button onClick={() => { quickLogin('Donor'); }} className="bg-sustain-600 hover:bg-sustain-700 text-white font-semibold px-8 py-3.5 rounded-xl shadow-lg shadow-sustain-600/20 transition-all hover:scale-[1.02] text-sm">
+                          Donate Surplus Food
+                        </button>
+                        <button onClick={() => { quickLogin('NGO'); }} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold px-8 py-3.5 rounded-xl border border-slate-200 dark:border-slate-800 transition-all hover:scale-[1.02] text-sm">
+                          Find Donations
+                        </button>
+                      </div>
+
+                      {/* Stat summary */}
+                      <div className="grid grid-cols-3 gap-6 pt-6 border-t border-slate-200 dark:border-slate-800/50 max-w-md mx-auto lg:mx-0">
+                        <div>
+                          <div className="text-2xl font-bold text-slate-950 dark:text-white font-outfit">{stats.foodSaved + 1500}kg</div>
+                          <div className="text-xxs text-slate-400 font-medium">Food Diverted</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-slate-950 dark:text-white font-outfit">{stats.totalDonationsCount + 280}</div>
+                          <div className="text-xxs text-slate-400 font-medium">Active Batches</div>
+                        </div>
+                        <div>
+                          <div className="text-2xl font-bold text-slate-950 dark:text-white font-outfit">{stats.ngosConnected + 42}</div>
+                          <div className="text-xxs text-slate-400 font-medium">Verified NGOs</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Graphic */}
+                    <div className="relative flex justify-center items-center lg:pl-10">
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-72 w-72 bg-sustain-500/20 rounded-full blur-[100px] -z-10 animate-pulse-slow"></div>
+                      <div className="relative rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 max-w-md w-full p-4 space-y-4">
+                        <div className="relative rounded-2xl overflow-hidden group h-56">
+                          <img 
+                            src="https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?auto=format&fit=crop&q=80&w=800" 
+                            alt="Feeding community volunteers"
+                            className="object-cover h-full w-full group-hover:scale-105 transition-transform duration-700"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                          <span className="absolute bottom-4 left-4 bg-emerald-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Live Activity</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 flex items-center justify-between border border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-3">
+                            <span className="h-3 w-3 bg-emerald-500 rounded-full animate-ping"></span>
+                            <div>
+                              <p className="text-xs font-bold text-slate-850 dark:text-slate-200">Fresh Buffet Items Available</p>
+                              <p className="text-[10px] text-slate-450 dark:text-slate-400">Listed by "Green Valley Hotel" • 20 mins expiry</p>
+                            </div>
+                          </div>
+                          <button onClick={() => quickLogin('NGO')} className="bg-sustain-600 hover:bg-sustain-700 text-white text-[10px] font-semibold py-1.5 px-3 rounded-lg">Claim</button>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </section>
+
+                {/* STATISTICS SECTION */}
+                <section className="py-12 bg-white dark:bg-slate-900 border-y border-slate-250 dark:border-slate-800">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                      <div className="space-y-1">
+                        <span className="text-4xl lg:text-5xl font-extrabold font-outfit text-sustain-600 dark:text-sustain-400">12,450+</span>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Food Saved (kg)</p>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-4xl lg:text-5xl font-extrabold font-outfit text-sustain-600 dark:text-sustain-400">350+</span>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Donations</p>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-4xl lg:text-5xl font-extrabold font-outfit text-sustain-600 dark:text-sustain-400">150+</span>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">NGOs Connected</p>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-4xl lg:text-5xl font-extrabold font-outfit text-sustain-600 dark:text-sustain-400">25,000+</span>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">People Helped</p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* ABOUT PROBLEM & SOLUTION SECTION */}
+                <section id="about" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <div>
+                      <img 
+                        src="https://images.unsplash.com/photo-1595273670150-db0a3e368157?auto=format&fit=crop&q=80&w=800" 
+                        alt="Food waste bins" 
+                        className="rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800"
+                      />
+                    </div>
+                    <div className="space-y-6">
+                      <h2 className="text-3xl font-extrabold font-outfit text-slate-900 dark:text-white">
+                        The Waste Paradox: Global Excess vs Local Hunger
+                      </h2>
+                      <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+                        <p>
+                          Nearly one-third of all food produced globally goes to waste, while millions suffer from malnutrition and hunger. This mismatch occurs due to fragmented logistics, short expiry windows, and lack of real-time communication channels between food producers and charities.
+                        </p>
+                        <p>
+                          <strong>EcoFeed</strong> acts as a real-time digital bridge. By providing instant food notifications, optimized dispatch tracking, verified charity enrollment, and feedback logs, we create an efficient circular economy that feeds communities and minimizes trash.
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 pt-2">
+                        <div className="flex items-start gap-2.5">
+                          <span className="h-6 w-6 rounded bg-sustain-100 dark:bg-sustain-950 flex items-center justify-center text-sustain-700 dark:text-sustain-400"><i className="fa-solid fa-hotel text-xs"></i></span>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">For Donors</h4>
+                            <p className="text-[11px] text-slate-550">Track ESG footprints, clear excess buffets legally, and help locals.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2.5">
+                          <span className="h-6 w-6 rounded bg-sustain-100 dark:bg-sustain-950 flex items-center justify-center text-sustain-700 dark:text-sustain-400"><i className="fa-solid fa-hands-holding-child text-xs"></i></span>
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 dark:text-white">For NGOs</h4>
+                            <p className="text-[11px] text-slate-550">Gain access to fresh, hygienic food batches safely and at zero cost.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* HOW IT WORKS SECTION */}
+                <section id="how-it-works" className="py-20 bg-slate-100/50 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-12">
+                    <div className="space-y-3">
+                      <h2 className="text-3xl font-extrabold font-outfit text-slate-900 dark:text-white">Simple, Automated Pickup Workflow</h2>
+                      <p className="text-sm text-slate-500 max-w-xl mx-auto">Five simple actions that prevent fresh nutrients from entering landfills.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                      
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl relative shadow-md">
+                        <span className="absolute top-4 left-4 text-xs font-bold text-slate-300 dark:text-slate-700 font-outfit">01</span>
+                        <div className="h-10 w-10 bg-sustain-500/10 text-sustain-600 rounded-xl flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-cloud-arrow-up text-lg"></i></div>
+                        <h4 className="text-sm font-bold mb-1">Donor Uploads</h4>
+                        <p className="text-xxs text-slate-400">Donor specifies food type, serving counts, address and photo.</p>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl relative shadow-md">
+                        <span className="absolute top-4 left-4 text-xs font-bold text-slate-300 dark:text-slate-700 font-outfit">02</span>
+                        <div className="h-10 w-10 bg-sustain-500/10 text-sustain-600 rounded-xl flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-bell text-lg"></i></div>
+                        <h4 className="text-sm font-bold mb-1">Alert Triggered</h4>
+                        <p className="text-xxs text-slate-400">Nearby verified NGOs receive a real-time notification push.</p>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl relative shadow-md">
+                        <span className="absolute top-4 left-4 text-xs font-bold text-slate-300 dark:text-slate-700 font-outfit">03</span>
+                        <div className="h-10 w-10 bg-sustain-500/10 text-sustain-600 rounded-xl flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-hand-holding-hand text-lg"></i></div>
+                        <h4 className="text-sm font-bold mb-1">NGO Accepts</h4>
+                        <p className="text-xxs text-slate-400">Charity claims the donation and locks in the pickup path.</p>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl relative shadow-md">
+                        <span className="absolute top-4 left-4 text-xs font-bold text-slate-300 dark:text-slate-700 font-outfit">04</span>
+                        <div className="h-10 w-10 bg-sustain-500/10 text-sustain-600 rounded-xl flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-truck-ramp-box text-lg"></i></div>
+                        <h4 className="text-sm font-bold mb-1">Food Collection</h4>
+                        <p className="text-xxs text-slate-400">NGO driver arrives, scans, checks hygiene, and collects batch.</p>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl relative shadow-md">
+                        <span className="absolute top-4 left-4 text-xs font-bold text-slate-300 dark:text-slate-700 font-outfit">05</span>
+                        <div className="h-10 w-10 bg-sustain-500/10 text-sustain-600 rounded-xl flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-bowl-food text-lg"></i></div>
+                        <h4 className="text-sm font-bold mb-1">Feeding Needy</h4>
+                        <p className="text-xxs text-slate-400">Meals are distributed safely to local shelters and communities.</p>
+                      </div>
+
+                    </div>
+                  </div>
+                </section>
+
+                {/* PLATFORM FEATURES PREVIEW */}
+                <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <div className="text-center space-y-3 mb-12">
+                    <h2 className="text-3xl font-extrabold font-outfit text-slate-900 dark:text-white">Engineered For Scale & Transparency</h2>
+                    <p className="text-sm text-slate-500 max-w-xl mx-auto">All tools integrated into a unified portal to streamline logistical handshakes.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                      <div className="h-10 w-10 bg-emerald-500/10 text-emerald-600 rounded-lg flex items-center justify-center mb-4"><i className="fa-solid fa-bolt text-lg"></i></div>
+                      <h3 className="text-base font-bold mb-2 text-slate-950 dark:text-white">Real-Time Listing</h3>
+                      <p className="text-xs text-slate-500 leading-relaxed">Instantly post surpluses with auto-expiry times to prevent spoiled food distributions.</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                      <div className="h-10 w-10 bg-sky-500/10 text-sky-600 rounded-lg flex items-center justify-center mb-4"><i className="fa-solid fa-map-location-dot text-lg"></i></div>
+                      <h3 className="text-base font-bold mb-2 text-slate-950 dark:text-white">Interactive Tracking</h3>
+                      <p className="text-xs text-slate-500 leading-relaxed">Integrated Google Maps mockups guide charity pickup staff to food pickup coordinates smoothly.</p>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                      <div className="h-10 w-10 bg-amber-500/10 text-amber-600 rounded-lg flex items-center justify-center mb-4"><i className="fa-solid fa-chart-line text-lg"></i></div>
+                      <h3 className="text-base font-bold mb-2 text-slate-950 dark:text-white">Impact Analytics</h3>
+                      <p className="text-xs text-slate-500 leading-relaxed">Track food waste reduction data in kg, generating instant ESG ESG reports for corporate donors.</p>
+                    </div>
+
+                  </div>
+                </section>
+
+                {/* CONTACT SECTION */}
+                <section id="contact" className="py-20 bg-slate-900 text-white border-t border-sustain-950">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div className="space-y-6">
+                      <h2 className="text-3xl font-extrabold font-outfit text-white">Join the Fight Against Food Waste</h2>
+                      <p className="text-sm text-slate-400 max-w-md">
+                        Have queries about integration, compliance, or food safety guidelines? Drop us a message, and our local sustain team will reach out.
+                      </p>
+                      <div className="space-y-3 text-xs text-slate-350">
+                        <div className="flex items-center gap-3">
+                          <i className="fa-solid fa-envelope text-sustain-400"></i>
+                          <span>support@ecofeed.org</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <i className="fa-solid fa-phone text-sustain-400"></i>
+                          <span>+1 (555) 492-9100</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <i className="fa-solid fa-location-dot text-sustain-400"></i>
+                          <span>Green Sustainability Lab, Tech City</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <form onSubmit={(e) => { e.preventDefault(); triggerToast("Message sent successfully!"); }} className="bg-slate-800 border border-slate-700/50 p-6 rounded-2xl space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-450 uppercase mb-1">Full Name</label>
+                          <input type="text" className="w-full text-xs p-2.5 rounded bg-slate-900 border border-slate-700 text-white" required />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-450 uppercase mb-1">Email</label>
+                          <input type="email" className="w-full text-xs p-2.5 rounded bg-slate-900 border border-slate-700 text-white" required />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-450 uppercase mb-1">Message</label>
+                        <textarea className="w-full text-xs p-2.5 rounded bg-slate-900 border border-slate-700 text-white" rows="3" required></textarea>
+                      </div>
+                      <button type="submit" className="w-full text-xs font-semibold py-2.5 bg-sustain-600 hover:bg-sustain-700 rounded-lg transition-colors">Send Message</button>
+                    </form>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* B. LOGIN VIEW */}
+            {currentView === 'login' && (
+              <section className="py-20 flex items-center justify-center bg-slate-100/50 dark:bg-slate-950/20">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-8 shadow-xl">
+                  <div className="text-center space-y-2 mb-6">
+                    <h2 className="text-2xl font-bold font-outfit">Welcome to EcoFeed</h2>
+                    <p className="text-xs text-slate-500">Sign in to coordinate food donations and pickups</p>
+                  </div>
+                  
+                  <form onSubmit={handleLogin} className="space-y-4 text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Email Address</label>
+                      <input 
+                        type="email" 
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="e.g., donor@lapiazza.com"
+                        className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                        required 
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="font-semibold text-slate-750 dark:text-slate-350">Password</label>
+                        <a href="#" className="text-[10px] text-sustain-600 hover:underline">Forgot password?</a>
+                      </div>
+                      <input 
+                        type="password" 
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                        required 
+                      />
+                    </div>
+                    <button type="submit" className="w-full font-semibold py-3 bg-sustain-600 hover:bg-sustain-700 text-white rounded-lg transition-colors text-sm">
+                      Login
+                    </button>
+                  </form>
+
+                  <div className="text-center mt-6 text-xs text-slate-500">
+                    Don't have an account?{' '}
+                    <button onClick={() => setCurrentView('register')} className="text-sustain-600 font-semibold hover:underline">Register now</button>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* C. REGISTER VIEW */}
+            {currentView === 'register' && (
+              <section className="py-20 flex items-center justify-center bg-slate-100/50 dark:bg-slate-955/20">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-8 shadow-xl">
+                  <div className="text-center space-y-2 mb-6">
+                    <h2 className="text-2xl font-bold font-outfit">Create Ecosystem Account</h2>
+                    <p className="text-xs text-slate-500">Join either as a food donor partner or a distribution NGO</p>
+                  </div>
+
+                  <form onSubmit={handleRegister} className="space-y-4 text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Register As</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button 
+                          type="button" 
+                          onClick={() => setRegRole('Donor')}
+                          className={`p-3 rounded-lg border font-semibold flex items-center justify-center gap-2 ${regRole === 'Donor' ? 'bg-sustain-500/10 border-sustain-500 text-sustain-700 dark:text-sustain-400' : 'border-slate-250 dark:border-slate-700'}`}
+                        >
+                          <i className="fa-solid fa-hotel"></i> Food Donor
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setRegRole('NGO')}
+                          className={`p-3 rounded-lg border font-semibold flex items-center justify-center gap-2 ${regRole === 'NGO' ? 'bg-sustain-500/10 border-sustain-500 text-sustain-700 dark:text-sustain-400' : 'border-slate-250 dark:border-slate-700'}`}
+                        >
+                          <i className="fa-solid fa-hands-holding-child"></i> NGO / Charity
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Your Name</label>
+                        <input 
+                          type="text" 
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                          placeholder="e.g. John Doe"
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                          required 
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Contact Email</label>
+                        <input 
+                          type="email" 
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                          placeholder="e.g. john@domain.com"
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                          required 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Phone Number</label>
+                        <input 
+                          type="text" 
+                          value={regPhone}
+                          onChange={(e) => setRegPhone(e.target.value)}
+                          placeholder="+1 555-xxxx"
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                          required 
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Secure Password</label>
+                        <input 
+                          type="password" 
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                          required 
+                        />
+                      </div>
+                    </div>
+
+                    {/* Conditional NGO organization fields */}
+                    {regRole === 'NGO' && (
+                      <div className="border-t border-slate-150 dark:border-slate-800 pt-4 space-y-4">
+                        <span className="font-semibold text-sustain-600 dark:text-sustain-400">NGO Verification Details</span>
+                        <div>
+                          <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Organization Legal Name</label>
+                          <input 
+                            type="text" 
+                            value={regNgoName}
+                            onChange={(e) => setRegNgoName(e.target.value)}
+                            placeholder="e.g. Save Food Foundation"
+                            className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                            required 
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-750 dark:text-slate-350 mb-1">Office Address</label>
+                          <input 
+                            type="text" 
+                            value={regNgoAddress}
+                            onChange={(e) => setRegNgoAddress(e.target.value)}
+                            placeholder="Street, City, Zip Code"
+                            className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100" 
+                            required 
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <button type="submit" className="w-full font-semibold py-3 bg-sustain-600 hover:bg-sustain-700 text-white rounded-lg transition-colors text-sm">
+                      Complete Registration
+                    </button>
+                  </form>
+
+                  <div className="text-center mt-6 text-xs text-slate-500">
+                    Already have an account?{' '}
+                    <button onClick={() => setCurrentView('login')} className="text-sustain-600 font-semibold hover:underline">Sign In</button>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* D. DONOR DASHBOARD VIEW */}
+            {currentView === 'donor-db' && currentUser && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                
+                {/* Header Banner */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold font-outfit">Donor Cockpit</h2>
+                    <p className="text-xs text-slate-500">Manage surplus batches for <strong>{currentUser.name}</strong></p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full font-bold border border-emerald-500/25">
+                      ESG Rating: 4.9 ★
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dashboard Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  
+                  {/* Left: Add Donation Form */}
+                  <div className="lg:col-span-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm h-fit">
+                    <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white pb-2 border-b border-slate-100 dark:border-slate-800">
+                      List New Food Surplus
+                    </h3>
+                    <form onSubmit={handleAddDonation} className="space-y-4 text-xs">
+                      <div>
+                        <label className="block font-semibold text-slate-650 dark:text-slate-400 mb-1">Food Item Name</label>
+                        <input 
+                          type="text" 
+                          value={foodName}
+                          onChange={(e) => setFoodName(e.target.value)}
+                          placeholder="e.g. 50 Servings Pasta & Salad"
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-slate-650 dark:text-slate-400 mb-1">Quantity (Servings/Kg)</label>
+                          <input 
+                            type="number" 
+                            value={foodQty}
+                            onChange={(e) => setFoodQty(e.target.value)}
+                            placeholder="e.g. 25"
+                            className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-650 dark:text-slate-400 mb-1">Food Category</label>
+                          <select 
+                            value={foodType}
+                            onChange={(e) => setFoodType(e.target.value)}
+                            className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900"
+                          >
+                            <option value="Veg">Vegetarian</option>
+                            <option value="Non-Veg">Non-Vegetarian</option>
+                            <option value="Bakery">Bakery / Bread</option>
+                            <option value="Groceries">Raw Groceries</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-semibold text-slate-650 dark:text-slate-400 mb-1">Expiry Datetime</label>
+                          <input 
+                            type="datetime-local" 
+                            value={foodExpiry}
+                            onChange={(e) => setFoodExpiry(e.target.value)}
+                            className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-650 dark:text-slate-400 mb-1">Image URL (Optional)</label>
+                          <input 
+                            type="text" 
+                            value={foodImage}
+                            onChange={(e) => setFoodImage(e.target.value)}
+                            placeholder="https://..."
+                            className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-650 dark:text-slate-400 mb-1">Pickup Address</label>
+                        <input 
+                          type="text" 
+                          value={foodAddress}
+                          onChange={(e) => setFoodAddress(e.target.value)}
+                          placeholder="Donor facility coordinates or address"
+                          className="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900"
+                          required
+                        />
+                      </div>
+                      <button type="submit" className="w-full py-3 bg-sustain-600 hover:bg-sustain-700 text-white font-bold rounded-lg transition-colors">
+                        Post Donation
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Right: History & Tracking Cockpit */}
+                  <div className="lg:col-span-2 space-y-6">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white">Active & Past Donations</h3>
+                      
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left text-slate-500 dark:text-slate-400">
+                          <thead className="text-[10px] text-slate-750 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-800">
+                            <tr>
+                              <th className="px-4 py-3">Food Item</th>
+                              <th className="px-4 py-3">Qty</th>
+                              <th className="px-4 py-3">Category</th>
+                              <th className="px-4 py-3">Status</th>
+                              <th className="px-4 py-3">NGO Logistics</th>
+                              <th className="px-4 py-3">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {donations.filter(d => d.donor_id === currentUser.id).map(d => (
+                              <tr key={d.donation_id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">{d.food_name}</td>
+                                <td className="px-4 py-3">{d.quantity} units</td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] ${
+                                    d.food_type === 'Veg' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200' :
+                                    d.food_type === 'Non-Veg' ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200' :
+                                    'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200'
+                                  }`}>{d.food_type}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    d.status === 'Available' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' :
+                                    d.status === 'Claimed' ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' :
+                                    'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-350'
+                                  }`}>{d.status}</span>
+                                </td>
+                                <td className="px-4 py-3 text-slate-500 text-[10px]">
+                                  {d.ngo_name ? (
+                                    <div>
+                                      <strong>{d.ngo_name}</strong>
+                                      <div className="text-[9px] text-sustain-600 dark:text-sustain-400">({d.pickup_status})</div>
+                                    </div>
+                                  ) : (
+                                    <span className="italic text-slate-400">Waiting for claim</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {d.status === 'Picked Up' && (
+                                    <button 
+                                      onClick={() => setActiveFeedbackDonation(d)}
+                                      className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-2.5 py-1 rounded"
+                                    >
+                                      Review NGO
+                                    </button>
+                                  )}
+                                  {d.status === 'Claimed' && (
+                                    <span className="text-[10px] text-slate-450 italic">In progress...</span>
+                                  )}
+                                  {d.status === 'Available' && (
+                                    <button 
+                                      onClick={() => { setDonations(donations.filter(x => x.donation_id !== d.donation_id)); triggerToast("Donation cancelled"); }}
+                                      className="text-rose-500 hover:text-rose-700 text-[10px]"
+                                    >
+                                      Cancel
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+            )}
+
+            {/* E. NGO DASHBOARD VIEW */}
+            {currentView === 'ngo-db' && currentUser && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                
+                {/* Header Banner */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                  <div>
+                    <h2 className="text-2xl font-bold font-outfit">NGO Cockpit</h2>
+                    <p className="text-xs text-slate-500">Distribution dashboard for <strong>{currentUser.organization_name}</strong></p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-3 py-1 rounded-full font-bold border ${
+                      currentUser.verification_status === 'Approved' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25'
+                    }`}>
+                      Status: {currentUser.verification_status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dashboard Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  
+                  {/* Left columns: Donation Finder & Accepted Items */}
+                  <div className="lg:col-span-2 space-y-8">
+                    
+                    {/* Browse and Search Section */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                        <h3 className="text-base font-bold font-outfit text-slate-950 dark:text-white">Find Available Food Donations</h3>
+                        
+                        {/* Search & Filters */}
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                          <input 
+                            type="text" 
+                            placeholder="Search location or item..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-950 dark:text-white"
+                          />
+                          <select 
+                            value={filterType} 
+                            onChange={(e) => setFilterType(e.target.value)}
+                            className="text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-950 dark:text-white"
+                          >
+                            <option value="All">All Categories</option>
+                            <option value="Veg">Vegetarian</option>
+                            <option value="Non-Veg">Non-Vegetarian</option>
+                            <option value="Bakery">Bakery / Bread</option>
+                            <option value="Groceries">Raw Groceries</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Donation Cards Layout */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {filteredDonations.filter(d => d.status === 'Available').length === 0 ? (
+                          <div className="col-span-2 py-8 text-center text-xs text-slate-400">
+                            No available donations found matching the criteria.
+                          </div>
+                        ) : (
+                          filteredDonations.filter(d => d.status === 'Available').map(d => (
+                            <div key={d.donation_id} className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800 flex flex-col">
+                              <div className="h-32 relative">
+                                <img src={d.image} alt={d.food_name} className="w-full h-full object-cover" />
+                                <span className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[9px] font-bold ${
+                                  d.food_type === 'Veg' ? 'bg-green-500 text-white' : 'bg-rose-500 text-white'
+                                }`}>{d.food_type}</span>
+                              </div>
+                              <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                                <div>
+                                  <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">{d.food_name}</h4>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">Qty: {d.quantity} servings • Expiry: {new Date(d.expiry_time).toLocaleTimeString()}</p>
+                                  <p className="text-[10px] text-slate-500 mt-2"><i className="fa-solid fa-location-dot text-sustain-500 mr-1"></i>{d.pickup_address}</p>
+                                </div>
+                                <button 
+                                  onClick={() => claimDonation(d.donation_id)}
+                                  className="w-full py-2 bg-sustain-600 hover:bg-sustain-700 text-white text-xs font-bold rounded-lg transition-colors"
+                                >
+                                  Claim & Request Pickup
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Claims and Logistics Tracker */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white">Active Pickups Logistics Tracker</h3>
+                      
+                      <div className="space-y-4">
+                        {donations.filter(d => d.ngo_id === currentUser.id && d.status !== 'Picked Up').length === 0 ? (
+                          <p className="text-xs text-slate-400 py-4 text-center">No active claimed pickup requests.</p>
+                        ) : (
+                          donations.filter(d => d.ngo_id === currentUser.id && d.status !== 'Picked Up').map(d => (
+                            <div key={d.donation_id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 dark:bg-slate-800">
+                              <div className="text-xs">
+                                <h4 className="font-bold text-slate-900 dark:text-white">{d.food_name}</h4>
+                                <p className="text-[10px] text-slate-400">Donor: {d.donor_name} • Location: {d.pickup_address}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="text-[9px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">
+                                    Logistics Status: {d.pickup_status}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2">
+                                {d.pickup_status === 'Requested' && (
+                                  <button 
+                                    onClick={() => updatePickupStatus(d.donation_id, 'In Transit')}
+                                    className="bg-sky-600 hover:bg-sky-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg"
+                                  >
+                                    Start Dispatch
+                                  </button>
+                                )}
+                                {d.pickup_status === 'In Transit' && (
+                                  <button 
+                                    onClick={() => updatePickupStatus(d.donation_id, 'Delivered')}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg"
+                                  >
+                                    Mark as Collected & Delivered
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Right Column: Google Maps Mock & Feedback Logs */}
+                  <div className="lg:col-span-1 space-y-6">
+                    
+                    {/* Google Maps Interactive Simulation */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <h3 className="text-base font-bold font-outfit mb-3 text-slate-950 dark:text-white">Active Pickup Navigation Map</h3>
+                      <div className="bg-slate-200 dark:bg-slate-850 h-56 rounded-xl relative overflow-hidden border border-slate-300 dark:border-slate-700 flex flex-col justify-between p-4">
+                        {/* Map graphical simulation */}
+                        <div className="absolute inset-0 flex flex-col justify-center items-center opacity-20 pointer-events-none">
+                          <i className="fa-solid fa-map text-8xl text-slate-400"></i>
+                        </div>
+                        <div className="z-10 flex justify-between w-full">
+                          <span className="bg-slate-900 text-white text-[9px] font-bold px-2 py-0.5 rounded-full"><i className="fa-solid fa-satellite mr-1"></i>GPS Enabled</span>
+                          <span className="bg-emerald-500 text-black text-[9px] font-bold px-2 py-0.5 rounded-full">Optimized Route</span>
+                        </div>
+                        
+                        {/* Simulated Path drawing using SVG */}
+                        <div className="absolute inset-0 p-8 flex items-center justify-center pointer-events-none">
+                          <svg className="w-full h-full text-sustain-500" stroke="currentColor" strokeWidth="3" fill="none">
+                            <path strokeDasharray="5" d="M10,20 Q60,50 120,40 T220,100" />
+                            <circle cx="10" cy="20" r="6" fill="#10b981" />
+                            <circle cx="220" cy="100" r="6" fill="#0369a1" />
+                          </svg>
+                        </div>
+
+                        <div className="z-10 bg-slate-900/90 text-white text-[10px] p-2 rounded-lg border border-slate-750 flex items-center justify-between">
+                          <span>Route: Shelter Hub ➔ La Piazza Facility</span>
+                          <strong>4.2 miles (11 min)</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* NGO Feedbacks List */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white">Donor Feedbacks logs</h3>
+                      <div className="space-y-3 max-h-56 overflow-y-auto no-scrollbar">
+                        {feedbacks.filter(f => f.to_user === currentUser.name || f.from_user === currentUser.name).map(f => (
+                          <div key={f.feedback_id} className="border-b border-slate-100 dark:border-slate-800 pb-2 text-[10px]">
+                            <div className="flex justify-between font-semibold">
+                              <span>From: {f.from_user}</span>
+                              <span className="text-amber-400">{"★".repeat(f.rating)}</span>
+                            </div>
+                            <p className="text-slate-400 italic mt-0.5">"{f.comment}"</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              </section>
+            )}
+
+            {/* F. ADMIN DASHBOARD VIEW */}
+            {currentView === 'admin-db' && currentUser && (
+              <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+                
+                {/* Header Banner */}
+                <div>
+                  <h2 className="text-2xl font-bold font-outfit">Platform Admin Console</h2>
+                  <p className="text-xs text-slate-500">Monitor ecosystem health, verify registrations, and audit donation logs.</p>
+                </div>
+
+                {/* Grid Analytics Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  
+                  {/* Left Column: Registrations approval list */}
+                  <div className="lg:col-span-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                    <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">
+                      Pending NGO Registrations
+                    </h3>
+                    <div className="space-y-4">
+                      {users.filter(u => u.role === 'NGO' && u.verification_status === 'Pending').length === 0 ? (
+                        <p className="text-xs text-slate-400 py-4 text-center">No pending registrations requiring review.</p>
+                      ) : (
+                        users.filter(u => u.role === 'NGO' && u.verification_status === 'Pending').map(u => (
+                          <div key={u.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50 dark:bg-slate-850 space-y-3 text-xs">
+                            <div>
+                              <h4 className="font-bold text-slate-900 dark:text-white">{u.organization_name}</h4>
+                              <p className="text-[10px] text-slate-400">Representative: {u.name}</p>
+                              <p className="text-[10px] text-slate-450 mt-1"><i className="fa-solid fa-location-dot mr-1"></i>{u.address}</p>
+                            </div>
+                            <div className="flex gap-2 justify-end pt-1">
+                              <button 
+                                onClick={() => rejectNgo(u.id)}
+                                className="bg-rose-500/10 text-rose-600 hover:bg-rose-600 hover:text-white text-[10px] font-bold px-2.5 py-1 rounded"
+                              >
+                                Reject
+                              </button>
+                              <button 
+                                onClick={() => approveNgo(u.id)}
+                                className="bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded"
+                              >
+                                Approve
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Dynamic SVG Impact Charts & Audit Logs */}
+                  <div className="lg:col-span-2 space-y-6">
+                    
+                    {/* SVG Analytics Charts (Mocking real ChartJS components beautifully) */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white">Donation Metrics (Monthly)</h3>
+                      
+                      <div className="h-44 flex items-end justify-between px-6 pt-4 border-b border-slate-200 dark:border-slate-800 relative">
+                        {/* Grid lines */}
+                        <div className="absolute inset-x-0 bottom-10 border-t border-slate-100 dark:border-slate-800/80"></div>
+                        <div className="absolute inset-x-0 bottom-24 border-t border-slate-100 dark:border-slate-800/80"></div>
+                        
+                        {/* Bar charts (pure responsive CSS/SVG design) */}
+                        <div className="flex flex-col items-center gap-1.5 z-10 w-1/4">
+                          <span className="text-[10px] font-bold text-slate-450">140kg</span>
+                          <div className="w-12 bg-sustain-400 hover:bg-sustain-500 rounded-t-lg transition-all" style={{height: '60px'}}></div>
+                          <span className="text-[10px] text-slate-400">March</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1.5 z-10 w-1/4">
+                          <span className="text-[10px] font-bold text-slate-450">280kg</span>
+                          <div className="w-12 bg-sustain-500 hover:bg-sustain-600 rounded-t-lg transition-all" style={{height: '95px'}}></div>
+                          <span className="text-[10px] text-slate-400">April</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1.5 z-10 w-1/4">
+                          <span className="text-[10px] font-bold text-slate-450">420kg</span>
+                          <div className="w-12 bg-sustain-600 hover:bg-sustain-700 rounded-t-lg transition-all animate-bounce" style={{height: '130px'}}></div>
+                          <span className="text-[10px] text-slate-400">May</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1.5 z-10 w-1/4">
+                          <span className="text-[10px] font-bold text-slate-450">120kg</span>
+                          <div className="w-12 bg-lime-400 hover:bg-lime-500 rounded-t-lg transition-all" style={{height: '45px'}}></div>
+                          <span className="text-[10px] text-slate-400">June (Current)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Complete donations global tracker */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                      <h3 className="text-base font-bold font-outfit mb-4 text-slate-950 dark:text-white">Global Donation Audit Logs</h3>
+                      
+                      <div className="overflow-x-auto text-xs">
+                        <table className="w-full text-left text-slate-500 dark:text-slate-400">
+                          <thead className="text-[10px] text-slate-700 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-800">
+                            <tr>
+                              <th className="px-4 py-2">ID</th>
+                              <th className="px-4 py-2">Food</th>
+                              <th className="px-4 py-2">Donor</th>
+                              <th className="px-4 py-2">NGO Partner</th>
+                              <th className="px-4 py-2">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {donations.map(d => (
+                              <tr key={d.donation_id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td className="px-4 py-2.5 font-bold">#{d.donation_id}</td>
+                                <td className="px-4 py-2.5 text-slate-900 dark:text-white font-semibold">{d.food_name}</td>
+                                <td className="px-4 py-2.5">{d.donor_name}</td>
+                                <td className="px-4 py-2.5">{d.ngo_name || <span className="text-slate-400 italic">None</span>}</td>
+                                <td className="px-4 py-2.5">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                                    d.status === 'Available' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' :
+                                    d.status === 'Claimed' ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' :
+                                    'bg-slate-200 text-slate-800 dark:bg-slate-800'
+                                  }`}>{d.status}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              </section>
+            )}
+
+          </main>
+
+          {/* --- FOOTER --- */}
+          <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 mt-auto py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-900 dark:text-white font-outfit">EcoFeed Platform</span>
+                <span>© 2026 EcoFeed Inc. All rights reserved.</span>
+              </div>
+              <div className="flex gap-4">
+                <a href="#" className="hover:underline">Privacy Policy</a>
+                <a href="#" className="hover:underline">Terms of Service</a>
+                <a href="#" className="hover:underline">Hygienic Code of Conduct</a>
+              </div>
+            </div>
+          </footer>
+
+        </div>
+      );
+    }
+
+    // Render React App
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
