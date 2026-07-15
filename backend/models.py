@@ -12,7 +12,10 @@ class User(db.Model):
     email = db.Column(db.String(100), nullable=False, unique=True)
     phone = db.Column(db.String(20), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.Enum('Donor', 'NGO', 'Admin'), nullable=False)
+    role = db.Column(db.Enum('Donor', 'NGO', 'Admin', 'Volunteer'), nullable=False)
+    eco_points = db.Column(db.Integer, default=0)
+    volunteer_hours = db.Column(db.Float, default=0.0)
+    volunteer_status = db.Column(db.String(50), default='Active')
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     
     # Relationships
@@ -33,6 +36,9 @@ class User(db.Model):
             'email': self.email,
             'phone': self.phone,
             'role': self.role,
+            'eco_points': self.eco_points,
+            'volunteer_hours': self.volunteer_hours,
+            'volunteer_status': self.volunteer_status,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
         if self.role == 'NGO' and self.ngo_profile:
@@ -77,7 +83,11 @@ class Donation(db.Model):
     expiry_time = db.Column(db.DateTime, nullable=False)
     pickup_address = db.Column(db.Text, nullable=False)
     image_url = db.Column(db.String(255), nullable=True)
-    status = db.Column(db.Enum('Available', 'Claimed', 'Picked Up', 'Cancelled'), default='Available')
+    status = db.Column(db.Enum('Available', 'Accepted', 'Picked Up', 'Delivered', 'Cancelled'), default='Available')
+    carbon_offset = db.Column(db.Float, default=0.0)
+    freshness_score = db.Column(db.Integer, nullable=True)
+    quality_status = db.Column(db.String(50), nullable=True)
+    qr_code_token = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     
     # Relationships
@@ -108,6 +118,10 @@ class Donation(db.Model):
             'pickup_address': self.pickup_address,
             'image_url': self.image_url,
             'status': self.status,
+            'carbon_offset': self.carbon_offset,
+            'freshness_score': self.freshness_score,
+            'quality_status': self.quality_status,
+            'qr_code_token': self.qr_code_token,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'logistics': claimed_details
         }
@@ -119,18 +133,28 @@ class PickupRequest(db.Model):
     request_id = db.Column(db.Integer, primary_key=True)
     donation_id = db.Column(db.Integer, db.ForeignKey('donations.donation_id', ondelete='CASCADE'), nullable=False)
     ngo_id = db.Column(db.Integer, db.ForeignKey('ngos.ngo_id', ondelete='CASCADE'), nullable=False)
+    volunteer_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     pickup_status = db.Column(db.Enum('Requested', 'In Transit', 'Delivered', 'Cancelled'), default='Requested')
     pickup_time = db.Column(db.DateTime, nullable=True)
+    route_distance = db.Column(db.Float, nullable=True)
+    route_duration = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # Relationships
+    volunteer = db.relationship('User', foreign_keys=[volunteer_id])
     
     def to_dict(self):
         return {
             'request_id': self.request_id,
             'donation_id': self.donation_id,
             'ngo_id': self.ngo_id,
+            'volunteer_id': self.volunteer_id,
+            'volunteer_name': self.volunteer.name if self.volunteer else None,
             'pickup_status': self.pickup_status,
             'pickup_time': self.pickup_time.isoformat() if self.pickup_time else None,
+            'route_distance': self.route_distance,
+            'route_duration': self.route_duration,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'donation_details': self.donation.to_dict() if self.donation else None
@@ -158,5 +182,27 @@ class Feedback(db.Model):
             'from_user_name': self.from_user.name if hasattr(self, 'from_user') and self.from_user else 'Unknown',
             'to_user_id': self.to_user_id,
             'to_user_name': self.to_user.name if hasattr(self, 'to_user') and self.to_user else 'Unknown',
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref=db.backref('notifications_list', cascade='all, delete-orphan'))
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'message': self.message,
+            'is_read': self.is_read,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
