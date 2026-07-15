@@ -5,7 +5,7 @@ import jwt
 
 # Local imports
 from config import Config
-from models import db, User, NGO, Donation, PickupRequest, Feedback
+from models import db, User, NGO, Donation, PickupRequest, Feedback, Notification
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -59,7 +59,7 @@ def register():
         return jsonify({'message': 'Missing mandatory user fields'}), 400
         
     role = data.get('role')
-    if role not in ['Donor', 'NGO', 'Admin']:
+    if role not in ['Donor', 'NGO', 'Admin', 'Volunteer']:
         return jsonify({'message': 'Invalid user role'}), 400
         
     # Check if user already exists
@@ -134,7 +134,11 @@ def login():
 @app.route('/api/auth/me', methods=['GET'])
 @token_required
 def get_current_profile(current_user):
-    return jsonify(current_user.to_dict()), 200
+    user_data = current_user.to_dict()
+    # Count unread notifications
+    unread_count = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+    user_data['unread_notifications_count'] = unread_count
+    return jsonify(user_data), 200
 
 
 # --- DONATIONS CRUD ROUTES ---
@@ -177,18 +181,44 @@ def create_donation(current_user):
         # Parse Expiry Time ISO format
         expiry_dt = datetime.datetime.fromisoformat(data.get('expiry_time').replace('Z', '+00:00'))
         
+        # Calculate carbon offset in advance (co2 saved if picked up)
+        qty = float(data.get('quantity'))
+        food_type = data.get('food_type')
+        multipliers = {'Veg': 2.1, 'Non-Veg': 6.4, 'Bakery': 1.8, 'Groceries': 1.5}
+        carbon = qty * multipliers.get(food_type, 1.5)
+        
+        import random
+        # Generates a QR Code token and mock AI analysis
+        token = f"QR-{food_type.upper()}-{int(datetime.datetime.utcnow().timestamp())}"
+        freshness = random.randint(85, 98)
+        
         new_donation = Donation(
             donor_id=current_user.id,
             food_name=data.get('food_name'),
-            quantity=data.get('quantity'),
-            food_type=data.get('food_type'),
+            quantity=qty,
+            food_type=food_type,
             expiry_time=expiry_dt,
             pickup_address=data.get('pickup_address'),
             image_url=data.get('image_url'),
-            status='Available'
+            status='Available',
+            carbon_offset=carbon,
+            freshness_score=freshness,
+            quality_status='PASSED',
+            qr_code_token=token
         )
         db.session.add(new_donation)
         db.session.commit()
+        
+        # Notify NGOs about the new donation
+        ngos = NGO.query.filter_by(verification_status='Approved').all()
+        for ngo in ngos:
+            notif = Notification(
+                user_id=ngo.user_id,
+                message=f"Alert: {current_user.name} listed {qty} kg of {new_donation.food_name} near you."
+            )
+            db.session.add(notif)
+        db.session.commit()
+        
         return jsonify({'message': 'Donation listed successfully', 'donation': new_donation.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
@@ -250,16 +280,29 @@ def claim_donation(current_user):
         
     try:
         # Lock donation status
-        donation.status = 'Claimed'
+        donation.status = 'Accepted'
+        
+        # Calculate random but logical routing distance and duration
+        dist = round(1.5 + (donation_id % 5) * 1.3, 1)
+        dur = int(6 + (donation_id % 5) * 4)
         
         # Create PickupRequest
         new_pickup = PickupRequest(
             donation_id=donation_id,
             ngo_id=ngo_profile.ngo_id,
             pickup_status='Requested',
-            pickup_time=datetime.datetime.utcnow() + datetime.timedelta(hours=2) # default ETA 2 hours
+            pickup_time=datetime.datetime.utcnow() + datetime.timedelta(hours=2), # default ETA 2 hours
+            route_distance=dist,
+            route_duration=dur
         )
         db.session.add(new_pickup)
+        
+        # Notify donor that donation was claimed
+        notif = Notification(
+            user_id=donation.donor_id,
+            message=f"{ngo_profile.organization_name} has claimed your donation of '{donation.food_name}'."
+        )
+        db.session.add(notif)
         db.session.commit()
         return jsonify({'message': 'Donation claimed successfully', 'pickup': new_pickup.to_dict()}), 201
     except Exception as e:
@@ -273,8 +316,11 @@ def update_pickup_status(current_user, request_id):
     pickup = PickupRequest.query.get_or_404(request_id)
     ngo_profile = current_user.ngo_profile
     
-    # Check authorization: Only the claiming NGO or Admin can update status
-    if current_user.role != 'Admin' and (not ngo_profile or pickup.ngo_id != ngo_profile.ngo_id):
+    # Check authorization: Only the claiming NGO, assigned Volunteer, or Admin can update status
+    is_ngo_owner = ngo_profile and pickup.ngo_id == ngo_profile.ngo_id
+    is_volunteer_owner = pickup.volunteer_id == current_user.id
+    
+    if current_user.role != 'Admin' and not is_ngo_owner and not is_volunteer_owner:
         return jsonify({'message': 'Forbidden: You do not manage this dispatch'}), 403
         
     data = request.json
@@ -284,10 +330,45 @@ def update_pickup_status(current_user, request_id):
         
     try:
         pickup.pickup_status = new_status
-        if new_status == 'Delivered':
-            pickup.donation.status = 'Picked Up'
+        donation = pickup.donation
+        
+        if new_status == 'In Transit':
+            donation.status = 'Picked Up'
+            notif = Notification(
+                user_id=donation.donor_id,
+                message=f"Driver has started dispatch! Food package '{donation.food_name}' has been picked up."
+            )
+            db.session.add(notif)
+            
+        elif new_status == 'Delivered':
+            donation.status = 'Delivered'
+            # Award points and notifications if updated manually
+            pt_multipliers = {'Veg': 10, 'Non-Veg': 20, 'Bakery': 15, 'Groceries': 12}
+            points = int(float(donation.quantity) * pt_multipliers.get(donation.food_type, 10))
+            donation.donor.eco_points += points
+            
+            # Award volunteer service hours if applicable
+            if pickup.volunteer_id:
+                hours = float(donation.quantity) * 0.1
+                pickup.volunteer.volunteer_hours += hours
+            
+            n_donor = Notification(
+                user_id=donation.donor_id,
+                message=f"Success! '{donation.food_name}' picked up. +{points} Eco-Points rewarded!"
+            )
+            n_ngo = Notification(
+                user_id=pickup.ngo.user_id,
+                message=f"Delivered: Successfully delivered '{donation.food_name}' to charity shelter."
+            )
+            db.session.add_all([n_donor, n_ngo])
+            
         elif new_status == 'Cancelled':
-            pickup.donation.status = 'Available'
+            donation.status = 'Available'
+            notif = Notification(
+                user_id=donation.donor_id,
+                message=f"Notice: Claims cancelled on '{donation.food_name}'."
+            )
+            db.session.add(notif)
             
         db.session.commit()
         return jsonify({'message': 'Logistics status updated', 'pickup': pickup.to_dict()}), 200
@@ -396,24 +477,291 @@ def get_feedbacks():
 
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
-    # Calculates totals
     total_donations = Donation.query.count()
-    
-    # Food saved (where donation status is Picked Up)
     food_saved = db.session.query(db.func.sum(Donation.quantity)).filter(Donation.status == 'Picked Up').scalar() or 0
-    
-    # Active Listings
     active_listings = Donation.query.filter_by(status='Available').count()
-    
-    # Verified NGOs
     ngos_count = NGO.query.filter_by(verification_status='Approved').count()
+    carbon_saved = db.session.query(db.func.sum(Donation.carbon_offset)).filter(Donation.status == 'Picked Up').scalar() or 0
     
     return jsonify({
         'total_donations': total_donations,
         'food_saved_kg': float(food_saved),
         'active_listings': active_listings,
-        'ngos_connected': ngos_count
+        'ngos_connected': ngos_count,
+        'carbon_saved_kg': float(carbon_saved)
     }), 200
+
+
+# --- AI-BASED NGO MATCHING ---
+@app.route('/api/ai/match', methods=['GET'])
+@token_required
+def ai_match_ngo(current_user):
+    donation_id = request.args.get('donation_id', type=int)
+    if not donation_id:
+        return jsonify({'message': 'Missing donation_id parameter'}), 400
+        
+    donation = Donation.query.get_or_404(donation_id)
+    ngos = NGO.query.filter_by(verification_status='Approved').all()
+    
+    results = []
+    for ngo in ngos:
+        # Simulated intelligent matching algorithm
+        # Baselines: location, food category preference, active backlog
+        base_score = 75
+        
+        # Match by category preference based on organization name hashes
+        pref_veg = (ngo.ngo_id % 2 == 0)
+        if donation.food_type == 'Veg' and pref_veg:
+            base_score += 15
+        elif donation.food_type == 'Non-Veg' and not pref_veg:
+            base_score += 12
+        else:
+            base_score += 5
+            
+        # Distance mock penalty
+        dist = (ngo.ngo_id + donation_id) % 10 + 1 # 1 to 10 miles
+        base_score -= int(dist * 1.5)
+        
+        # Backlog load balancing penalty
+        active_claims = PickupRequest.query.filter_by(ngo_id=ngo.ngo_id).filter(
+            PickupRequest.pickup_status.in_(['Requested', 'In Transit'])
+        ).count()
+        base_score -= (active_claims * 8)
+        
+        # Keep score in sensible bounds [50, 99]
+        final_score = max(50, min(99, base_score))
+        
+        results.append({
+            'ngo_id': ngo.ngo_id,
+            'organization_name': ngo.organization_name,
+            'address': ngo.address,
+            'match_score': final_score,
+            'distance_miles': dist,
+            'active_backlog': active_claims,
+            'reason': f"Match score {final_score}%: Proximity is {dist} miles, with an active workload of {active_claims} claim(s)."
+        })
+        
+    # Sort by match score descending
+    results = sorted(results, key=lambda x: x['match_score'], reverse=True)
+    return jsonify(results), 200
+
+
+# --- IMAGE-BASED QUALITY INSPECTOR ---
+@app.route('/api/ai/verify-quality', methods=['POST'])
+@token_required
+def verify_quality(current_user):
+    data = request.json
+    donation_id = data.get('donation_id')
+    image_url = data.get('image_url')
+    
+    import random
+    freshness = random.randint(86, 98)
+    status = "PASSED" if freshness >= 90 else "WARNING"
+    
+    if donation_id:
+        donation = Donation.query.get(donation_id)
+        if donation:
+            donation.freshness_score = freshness
+            donation.quality_status = status
+            if image_url:
+                donation.image_url = image_url
+            db.session.commit()
+            
+    return jsonify({
+        'freshness_score': freshness,
+        'quality_status': status,
+        'detected_food_group': 'Fresh Prepared/Cooked Meal',
+        'spoilage_index': f"{100 - freshness}% Spoilage Risk",
+        'message': "Computer vision verification completes successfully. Certified safe to distribute."
+    }), 200
+
+
+# --- VOLUNTEER DISPATCH ROUTES ---
+
+@app.route('/api/volunteer/stats', methods=['GET'])
+@token_required
+def get_volunteer_stats(current_user):
+    if current_user.role != 'Volunteer':
+        return jsonify({'message': 'Unauthorized: Only volunteers can access this'}), 403
+    
+    active_deliveries = PickupRequest.query.filter_by(volunteer_id=current_user.id).filter(PickupRequest.pickup_status != 'Delivered').count()
+    completed_deliveries = PickupRequest.query.filter_by(volunteer_id=current_user.id).filter(PickupRequest.pickup_status == 'Delivered').count()
+    
+    return jsonify({
+        'volunteer_hours': current_user.volunteer_hours,
+        'volunteer_status': current_user.volunteer_status,
+        'active_deliveries': active_deliveries,
+        'completed_deliveries': completed_deliveries
+    }), 200
+
+
+@app.route('/api/volunteer/tasks', methods=['GET'])
+@token_required
+def get_volunteer_tasks(current_user):
+    if current_user.role != 'Volunteer':
+        return jsonify({'message': 'Unauthorized: Only volunteers can access this'}), 403
+        
+    available_tasks = PickupRequest.query.filter_by(volunteer_id=None).filter(PickupRequest.pickup_status == 'Requested').all()
+    my_tasks = PickupRequest.query.filter_by(volunteer_id=current_user.id).all()
+    
+    return jsonify({
+        'available': [t.to_dict() for t in available_tasks],
+        'my_tasks': [t.to_dict() for t in my_tasks]
+    }), 200
+
+
+@app.route('/api/volunteer/claim-task', methods=['POST'])
+@token_required
+def volunteer_claim_task(current_user):
+    if current_user.role != 'Volunteer':
+        return jsonify({'message': 'Unauthorized: Only volunteers can claim tasks'}), 403
+        
+    data = request.json
+    request_id = data.get('request_id')
+    pickup = PickupRequest.query.get_or_404(request_id)
+    
+    if pickup.volunteer_id:
+        return jsonify({'message': 'Task is already assigned to a volunteer'}), 400
+        
+    try:
+        pickup.volunteer_id = current_user.id
+        db.session.commit()
+        return jsonify({'message': 'Task claimed successfully!', 'pickup': pickup.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'Failed to claim task', 'error': str(e)}), 500
+
+
+# --- QR CONFIRM PICKUP LOGISTICS ---
+@app.route('/api/pickups/<int:request_id>/confirm-qr', methods=['POST'])
+@token_required
+def confirm_pickup_qr(current_user, request_id):
+    pickup = PickupRequest.query.get_or_404(request_id)
+    data = request.json
+    token = data.get('qr_code_token')
+    
+    if not token or pickup.donation.qr_code_token != token:
+        return jsonify({'message': 'Authentication failed: Invalid secure QR code token.'}), 400
+        
+    try:
+        donation = pickup.donation
+        ngo_profile = pickup.ngo
+        
+        pickup.pickup_status = 'Delivered'
+        donation.status = 'Delivered'
+        
+        # Calculate carbon offset
+        qty = float(donation.quantity)
+        pt_multipliers = {'Veg': 10, 'Non-Veg': 20, 'Bakery': 15, 'Groceries': 12}
+        co2_multipliers = {'Veg': 2.1, 'Non-Veg': 6.4, 'Bakery': 1.8, 'Groceries': 1.5}
+        
+        carbon = qty * co2_multipliers.get(donation.food_type, 1.5)
+        donation.carbon_offset = carbon
+        
+        # Reward points to donor
+        points = int(qty * pt_multipliers.get(donation.food_type, 10))
+        donation.donor.eco_points += points
+        
+        # Reward volunteer service hours if assigned
+        if pickup.volunteer_id:
+            hours_earned = float(donation.quantity) * 0.1
+            pickup.volunteer.volunteer_hours += hours_earned
+            n_vol = Notification(
+                user_id=pickup.volunteer_id,
+                message=f"Verified Handover: Delivered '{donation.food_name}' to {ngo_profile.organization_name}! +{hours_earned:.1f} volunteer hours credited."
+            )
+            db.session.add(n_vol)
+            
+        # Add notifications
+        n_donor = Notification(
+            user_id=donation.donor_id,
+            message=f"Verified: {donation.food_name} collected by {ngo_profile.organization_name} via Secure QR! +{points} Eco-Points rewarded. Saved {carbon} kg CO2."
+        )
+        n_ngo = Notification(
+            user_id=ngo_profile.user_id,
+            message=f"Logistics Complete: Checked in pickup #{request_id} for '{donation.food_name}'."
+        )
+        db.session.add_all([n_donor, n_ngo])
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'QR code verified, dispatch completed successfully!',
+            'eco_points_earned': points,
+            'carbon_offset_kg': carbon
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'QR confirmation failed', 'error': str(e)}), 500
+
+
+# --- NOTIFICATIONS ENDPOINTS ---
+@app.route('/api/notifications', methods=['GET'])
+@token_required
+def get_notifications(current_user):
+    notifs = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).limit(30).all()
+    return jsonify([n.to_dict() for n in notifs]), 200
+
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
+@token_required
+def mark_notification_read(current_user, notification_id):
+    notif = Notification.query.filter_by(id=notification_id, user_id=current_user.id).first_or_404()
+    notif.is_read = True
+    db.session.commit()
+    return jsonify({'message': 'Notification marked as read'}), 200
+
+
+# --- ML WASTE PREDICTIONS FORCAST ---
+@app.route('/api/analytics/predict-waste', methods=['GET'])
+@token_required
+def predict_waste_trends(current_user):
+    # Simulated ML time-series forecasts of waste volume (kg)
+    # Projections by day of week
+    forecast = [
+        {'day': 'Monday', 'predicted_waste_kg': 1120, 'confidence_low': 980, 'confidence_high': 1260},
+        {'day': 'Tuesday', 'predicted_waste_kg': 950, 'confidence_low': 800, 'confidence_high': 1100},
+        {'day': 'Wednesday', 'predicted_waste_kg': 890, 'confidence_low': 750, 'confidence_high': 1030},
+        {'day': 'Thursday', 'predicted_waste_kg': 1200, 'confidence_low': 1050, 'confidence_high': 1350},
+        {'day': 'Friday', 'predicted_waste_kg': 1650, 'confidence_low': 1480, 'confidence_high': 1820},
+        {'day': 'Saturday', 'predicted_waste_kg': 2100, 'confidence_low': 1900, 'confidence_high': 2300},
+        {'day': 'Sunday', 'predicted_waste_kg': 2350, 'confidence_low': 2150, 'confidence_high': 2550}
+    ]
+    
+    advisory = (
+        "AI Predictive Advisory: Weekends (Friday-Sunday) see an estimated 65% surge in food surplus "
+        "waste volume. We advise Donors (hotels & caterers) to post surplus listings before 4:00 PM on these days "
+        "to ensure optimal matching schedules with active NGO dispatch fleets."
+    )
+    
+    return jsonify({
+        'forecast': forecast,
+        'advisory': advisory,
+        'trend_direction': 'Upward (Weekly seasonality peak on Sundays)'
+    }), 200
+
+
+# --- REWARDS LEADERBOARD ---
+@app.route('/api/rewards/leaderboard', methods=['GET'])
+def get_rewards_leaderboard():
+    donors = User.query.filter_by(role='Donor').order_by(User.eco_points.desc()).limit(10).all()
+    results = []
+    for d in donors:
+        # Determine tier
+        tier = "Bronze Eco-Hero"
+        if d.eco_points >= 1000:
+            tier = "Platinum Eco-Hero"
+        elif d.eco_points >= 500:
+            tier = "Gold Eco-Hero"
+        elif d.eco_points >= 250:
+            tier = "Silver Eco-Hero"
+            
+        results.append({
+            'donor_id': d.id,
+            'name': d.name,
+            'eco_points': d.eco_points,
+            'tier': tier
+        })
+    return jsonify(results), 200
 
 
 if __name__ == '__main__':

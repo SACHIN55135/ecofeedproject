@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -13,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard';
 
 // Protected Route Guard
 function ProtectedRoute({ children, allowedRoles }) {
+  const text = useAuth(); // keep useAuth
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -82,11 +84,13 @@ function MainAppLayout() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <MainAppLayout />
-        </Router>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <Router>
+            <MainAppLayout />
+          </Router>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

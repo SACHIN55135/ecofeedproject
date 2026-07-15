@@ -1,5 +1,5 @@
 from app import app
-from models import db, User, NGO, Donation, Feedback, PickupRequest
+from models import db, User, NGO, Donation, Feedback, PickupRequest, Notification
 import datetime
 
 def seed_database():
@@ -15,12 +15,12 @@ def seed_database():
     print("Seeding initial database entries...")
     
     # 1. Create Users
-    # Donor 1
-    u_donor1 = User(name="La Piazza Restaurant", email="donor@lapiazza.com", phone="+1 555-0199", role="Donor")
+    # Donor 1 (give some initial points representing past activity)
+    u_donor1 = User(name="La Piazza Restaurant", email="donor@lapiazza.com", phone="+1 555-0199", role="Donor", eco_points=450)
     u_donor1.set_password("password")
     
     # Donor 2
-    u_donor2 = User(name="Green Valley Hotel", email="hotel@greenvalley.com", phone="+1 555-0211", role="Donor")
+    u_donor2 = User(name="Green Valley Hotel", email="hotel@greenvalley.com", phone="+1 555-0211", role="Donor", eco_points=120)
     u_donor2.set_password("password")
     
     # NGO 1
@@ -67,7 +67,11 @@ def seed_database():
         expiry_time=datetime.datetime.utcnow() + datetime.timedelta(hours=6),
         pickup_address="456 Italian Way, Food District",
         image_url="https://images.unsplash.com/photo-1574894709920-11b28e7367e3?auto=format&fit=crop&q=80&w=600",
-        status="Available"
+        status="Available",
+        carbon_offset=52.5,
+        freshness_score=94,
+        quality_status="PASSED",
+        qr_code_token="QR-D1-101"
     )
     
     d2 = Donation(
@@ -78,7 +82,11 @@ def seed_database():
         expiry_time=datetime.datetime.utcnow() + datetime.timedelta(hours=4),
         pickup_address="88 Luxury Blvd, Uptown",
         image_url="https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=600",
-        status="Claimed"
+        status="Claimed",
+        carbon_offset=384.0,
+        freshness_score=88,
+        quality_status="PASSED",
+        qr_code_token="QR-D2-102"
     )
     
     d3 = Donation(
@@ -88,8 +96,12 @@ def seed_database():
         food_type="Bakery",
         expiry_time=datetime.datetime.utcnow() - datetime.timedelta(hours=4), # Expired/past
         pickup_address="456 Italian Way, Food District",
-        image_url="https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=600",
-        status="Picked Up"
+        image_url="https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&q=80&w=600",
+        status="Picked Up",
+        carbon_offset=27.0,
+        freshness_score=82,
+        quality_status="PASSED",
+        qr_code_token="QR-D3-103"
     )
 
     d4 = Donation(
@@ -100,7 +112,11 @@ def seed_database():
         expiry_time=datetime.datetime.utcnow() + datetime.timedelta(hours=8),
         pickup_address="88 Luxury Blvd, Uptown",
         image_url="https://images.unsplash.com/photo-1519996529931-28324d5a630e?auto=format&fit=crop&q=80&w=600",
-        status="Available"
+        status="Available",
+        carbon_offset=63.0,
+        freshness_score=91,
+        quality_status="PASSED",
+        qr_code_token="QR-D4-104"
     )
 
     db.session.add_all([d1, d2, d3, d4])
@@ -112,14 +128,18 @@ def seed_database():
         donation_id=d2.donation_id,
         ngo_id=ngo1_details.ngo_id,
         pickup_status="Requested",
-        pickup_time=datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+        pickup_time=datetime.datetime.utcnow() + datetime.timedelta(hours=1),
+        route_distance=4.2,
+        route_duration=11.0
     )
     
     pr2 = PickupRequest(
         donation_id=d3.donation_id,
         ngo_id=ngo1_details.ngo_id,
         pickup_status="Delivered",
-        pickup_time=datetime.datetime.utcnow() - datetime.timedelta(hours=2)
+        pickup_time=datetime.datetime.utcnow() - datetime.timedelta(hours=2),
+        route_distance=3.5,
+        route_duration=9.0
     )
 
     db.session.add_all([pr1, pr2])
@@ -146,6 +166,15 @@ def seed_database():
     db.session.add_all([f1, f2])
     db.session.commit()
     print("Feedbacks seeded.")
+
+    # 6. Seed Notifications
+    n1 = Notification(user_id=u_ngo1.id, message="New donation added by La Piazza Restaurant", is_read=False)
+    n2 = Notification(user_id=u_donor2.id, message="Save Food Foundation claimed your Mixed Dinner Buffet Items listing", is_read=False)
+    n3 = Notification(user_id=u_donor1.id, message="Your donation of Assorted Breakfast Pastries has been successfully picked up! +225 Eco-Points rewarded.", is_read=True)
+    db.session.add_all([n1, n2, n3])
+    db.session.commit()
+    print("Notifications seeded.")
+    
     print("Database seeding completed successfully!")
 
 if __name__ == "__main__":
